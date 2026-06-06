@@ -1,14 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import sqlite3, os, base64, io, pickle
+import sqlite3, os, base64, io
 from datetime import datetime
 from PIL import Image
-import numpy as np
 
 app = Flask(__name__)
 CORS(app)
 DB_PATH = "absensi.db"
-DATASET_DIR = "dataset"
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -26,59 +24,23 @@ def index():
 def absen():
     try:
         data = request.get_json()
-        foto_bytes = base64.b64decode(data["foto_base64"])
-        device_info = data.get("device", "unknown")
-
-        # Simpan foto sementara
-        image = Image.open(io.BytesIO(foto_bytes)).convert("RGB")
-        foto_path = "/tmp/foto_absen.jpg"
-        image.save(foto_path)
-
-        # Load encodings
-        if not os.path.exists("face_encodings.pkl"):
-            return jsonify({"sukses": False, "pesan": "Data wajah belum ada di server"})
-
-        import face_recognition
-        with open("face_encodings.pkl", "rb") as f:
-            data_enc = pickle.load(f)
-
-        foto_array = np.array(image)
-        face_locs = face_recognition.face_locations(foto_array)
-        if not face_locs:
-            return jsonify({"sukses": False, "pesan": "Wajah tidak terdeteksi"})
-
-        face_encs = face_recognition.face_encodings(foto_array, face_locs)
-        nama_dikenali = None
-
-        for enc in face_encs:
-            matches = face_recognition.compare_faces(data_enc["encodings"], enc, tolerance=0.5)
-            distances = face_recognition.face_distance(data_enc["encodings"], enc)
-            if True in matches:
-                best = np.argmin(distances)
-                if matches[best]:
-                    nama_dikenali = data_enc["names"][best]
-                    break
-
-        if not nama_dikenali:
-            return jsonify({"sukses": False, "pesan": "Wajah tidak dikenali"})
-
+        nama = data.get("nama")
+        nim = data.get("nim")
+        device = data.get("device", "desktop")
+        if not nama or not nim:
+            return jsonify({"sukses": False, "pesan": "Nama dan NIM wajib diisi"})
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("SELECT nim FROM mahasiswa WHERE nama=?", (nama_dikenali,))
-        row = c.fetchone()
-        nim = row[0] if row else "unknown"
         tanggal = datetime.now().strftime("%Y-%m-%d")
+        waktu = datetime.now().strftime("%H:%M:%S")
         c.execute("SELECT id FROM absensi WHERE nim=? AND tanggal=?", (nim, tanggal))
         if c.fetchone():
             conn.close()
-            return jsonify({"sukses": True, "sudah_absen": True, "nama": nama_dikenali, "nim": nim, "pesan": f"{nama_dikenali} sudah absen hari ini"})
-
-        waktu = datetime.now().strftime("%H:%M:%S")
-        c.execute("INSERT INTO absensi (nim,nama,tanggal,waktu,status,device) VALUES (?,?,?,?,?,?)",
-                  (nim, nama_dikenali, tanggal, waktu, "HADIR", device_info))
+            return jsonify({"sukses": True, "sudah_absen": True, "nama": nama, "nim": nim, "pesan": f"{nama} sudah absen hari ini"})
+        c.execute("INSERT INTO absensi (nim,nama,tanggal,waktu,status,device) VALUES (?,?,?,?,?,?)", (nim, nama, tanggal, waktu, "HADIR", device))
         conn.commit()
         conn.close()
-        return jsonify({"sukses": True, "sudah_absen": False, "nama": nama_dikenali, "nim": nim, "waktu": waktu, "tanggal": tanggal, "pesan": f"{nama_dikenali} berhasil absen!"})
+        return jsonify({"sukses": True, "sudah_absen": False, "nama": nama, "nim": nim, "waktu": waktu, "tanggal": tanggal, "pesan": f"{nama} berhasil absen!"})
     except Exception as e:
         return jsonify({"sukses": False, "pesan": str(e)}), 500
 
