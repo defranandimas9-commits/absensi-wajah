@@ -1,6 +1,8 @@
 flask
 flask-cors
 face-recognition
+dlib
 numpy
 Pillow
 gunicorn
+cmake
