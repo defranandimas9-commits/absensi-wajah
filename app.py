@@ -1,8 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import sqlite3, os, base64, io
+import sqlite3, os
 from datetime import datetime
-from PIL import Image
 
 app = Flask(__name__)
 CORS(app)
